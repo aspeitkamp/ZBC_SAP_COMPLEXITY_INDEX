@@ -26,7 +26,7 @@ The report is inspired by the paper
 <img src="output_salv.jpg" alt="Output SALV" />
 
 #### Mail Excel XLSX
-<img src="output_salv.jpg" alt="Mail XLSX" />
+<img src="mail_xlsx.jpg" alt="Mail XLSX" />
 
 #### Download Excel XLSX
-<img src="output_salv.jpg" alt="Download XLSX" />
+<img src="download_xlsx.jpg" alt="Download XLSX" />
