@@ -1,11 +1,26 @@
 *&---------------------------------------------------------------------*
 *& Report ZBC_SAP_COMPLEXITY_INDEX
 *&---------------------------------------------------------------------*
-*& Calculation of the "SAP Complexity Index"
+*& Calculation of a "SAP Complexity Index"
 *&
-*& based on the report "IHC_ORG" from Ilja Holub
+*&   The purpose of the report is to calculate a comparable metric
+*&   of system complexity. It uses a defined set of tables from all
+*&   areas (modules) of a SAP system.
+*&
+*&   By evaluating the system in regular intervals it is possible
+*&   to identify areas with high growth in complexity or to identify
+*&   areas with potential for improvements.
+*&
+*&   The result can be:
+*&    - viewed via SALV
+*&    - exported as an Excel XLSX
+*&    - mailed as Excel XLSX file attachment (e.g. in a monthly job run)
+*&
+*&   The report is inspired by the paper
+*&   "Measuring Complexity of SAP Systems" by Ilja Holub and Tomas Bruckner
+*&
 *&---------------------------------------------------------------------*
-*&
+*&  Created: Arno Speitkamp, ASP-data GmbH
 *&---------------------------------------------------------------------*
 REPORT zbc_sap_complexity_index.
 
@@ -15,9 +30,9 @@ TABLES:
 TYPES:
   BEGIN OF ts_result,
     module     TYPE string,
-    ps_posid   TYPE string, "PS_POSID,
+    ps_posid   TYPE string,
     component  TYPE df14t-name,
-    ddtext     TYPE string, "dd02t-ddtext,
+    ddtext     TYPE string,
     tabname    TYPE dd02l-tabname,
     clidep     TYPE dd02l-clidep,
     complexity TYPE i,
@@ -26,14 +41,14 @@ TYPES:
   tt_result TYPE STANDARD TABLE OF ts_result.
 
 DATA:
-  gr_salv      TYPE REF TO cl_salv_table,
-  gt_result    TYPE tt_result,
-  gt_xlsx_data TYPE solix_tab,
-  gv_xlsx_size TYPE i.
+  gr_salv      TYPE REF TO cl_salv_table  ##NEEDED,
+  gt_result    TYPE tt_result             ##NEEDED,
+  gt_xlsx_data TYPE solix_tab             ##NEEDED,
+  gv_xlsx_size TYPE i                     ##NEEDED.
 
 CONSTANTS:
-  cv_file_name  TYPE string     VALUE 'SAP_Complexity_Index.xlsx',
-  cv_mail_title TYPE so_obj_des VALUE 'SAP Complexity Report'.
+  cv_file_name  TYPE string     VALUE 'SAP_Complexity_Index.xlsx' ##NO_TEXT,
+  cv_mail_title TYPE so_obj_des VALUE 'SAP Complexity Report'     ##NO_TEXT.
 
 SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE TEXT-010.
 SELECT-OPTIONS:
@@ -266,7 +281,7 @@ FORM get_default_path CHANGING cv_path TYPE string.
       WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
   ENDIF.
 
-  p_path = p_path && lv_file_sep.
+  cv_path = cv_path && lv_file_sep.
 
 ENDFORM.
 
@@ -428,7 +443,8 @@ FORM show_salv USING    iv_rb_show TYPE sap_bool
         SELECT SINGLE scrtext_s, scrtext_m, scrtext_l FROM dd04t INTO @DATA(ls_ps_posid_txt)
           WHERE rollname = 'PS_POSID'
             AND ddlanguage = @sy-langu
-            AND as4local   = 'A'.
+            AND as4local   = 'A'
+            AND as4vers    = ''.
 
         lr_column->set_short_text( ls_ps_posid_txt-scrtext_s ).
         lr_column->set_medium_text( ls_ps_posid_txt-scrtext_m ).
@@ -556,25 +572,11 @@ FORM calculate_complexity_index USING    it_range_mandt LIKE s_mandt[]
                                          it_range_table LIKE s_table[]
                                 CHANGING ct_result      TYPE tt_result.
 
-  TYPES:
-    BEGIN OF ts_t001_land1,
-      land1   TYPE land1,
-      entries TYPE i,
-    END OF ts_t001_land1.
-
-
-
-
-
   DATA:
-    lr_column           TYPE REF TO cl_salv_column,
     ls_result           TYPE ts_result,
     lt_components       TYPE STANDARD TABLE OF fieldname,
-*    lt_result           TYPE STANDARD TABLE OF ts_result,
-    lt_t001_land1       TYPE STANDARD TABLE OF ts_t001_land1,
-    lv_complexity_index TYPE i,
-    lv_component        TYPE fieldname,
-    lv_msg              TYPE string.
+    lv_component        TYPE fieldname.
+
 
   CLEAR: ct_result.
 
@@ -600,28 +602,31 @@ FORM calculate_complexity_index USING    it_range_mandt LIKE s_mandt[]
     AND dd02t~as4vers    = '0000'
     WHERE dd02l~tabname IN @it_range_table
       AND dd02l~tabclass = 'TRANSP'
-      AND dd02l~contflag IN ( 'C', 'G', 'W', 'E' ).      " W für TSTC usw., 'E' = AGR_DEFINE
+      AND dd02l~contflag IN ( 'C', 'G', 'W', 'E' ) ##TOO_MANY_ITAB_FIELDS.      " W für TSTC usw., 'E' = AGR_DEFINE
 
   IF sy-subrc <> 0.
-    MESSAGE s002(wusl002).   " no values found
+    MESSAGE s002(wusl).   " no values found
     RETURN.
   ENDIF.
 
   LOOP AT lt_t000 ASSIGNING FIELD-SYMBOL(<ls_t000>).
     LOOP AT ct_result ASSIGNING FIELD-SYMBOL(<ls_result>).
       " add component
-      SELECT SINGLE df14t~name, df14l~ps_posid INTO ( @<ls_result>-component, @<ls_result>-ps_posid )
+      SELECT df14t~name, df14l~ps_posid INTO ( @<ls_result>-component, @<ls_result>-ps_posid )
+        UP TO 1 ROWS
         FROM tadir INNER JOIN tdevc ON
         tdevc~devclass = tadir~devclass
         INNER JOIN df14l
-        ON df14l~fctr_id = tdevc~component
+         ON df14l~fctr_id  = tdevc~component
+        AND df14l~as4local = 'A'
         INNER JOIN df14t
-        ON df14t~langu = @sy-langu
-        AND df14t~fctr_id = tdevc~component
+         ON df14t~langu    = @sy-langu
+        AND df14t~fctr_id  = tdevc~component
+        AND df14t~as4local = 'A'
         WHERE tadir~pgmid = 'R3TR'
           AND tadir~object = 'TABL'
           AND tadir~obj_name = @<ls_result>-tabname.
-
+      ENDSELECT.
 
       CASE <ls_result>-tabname.
         WHEN 'T001'.
