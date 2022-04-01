@@ -250,7 +250,8 @@ FORM get_default_path CHANGING cv_path TYPE string.
   DATA:
     lv_file_sep(1) TYPE c.
 
-  CHECK cv_path IS INITIAL.
+  CHECK cv_path IS INITIAL AND
+        sy-batch = abap_false.  " if run in background, we cannot access the SAP GUI functions
 
   cl_gui_frontend_services=>get_sapgui_workdir(
     CHANGING
@@ -521,8 +522,13 @@ FORM download USING    iv_file_path TYPE string
   DATA:
     lv_complete_filename TYPE string.
 
+  IF sy-batch = abap_true.
+    MESSAGE e480(8B).           " not possible in background
+  ENDIF.
+
   CHECK iv_xlsx_size IS NOT INITIAL AND
-        ct_xlsx_data IS NOT INITIAL.
+        ct_xlsx_data IS NOT INITIAL AND
+        iv_file_path IS NOT INITIAL.
 
   lv_complete_filename = iv_file_path && cv_file_name.
 
